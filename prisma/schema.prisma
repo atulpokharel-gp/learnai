@@ -1,0 +1,425 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// =====================================================
+// TENANT / SCHOOL
+// =====================================================
+
+model School {
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  logoUrl        String?
+  address        String?
+  contactEmail   String
+  contactPhone   String?
+  subscriptionPlan String  @default("free")
+  subscriptionStatus String @default("active")
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  users          User[]
+  classes        Class[]
+  subjects       Subject[]
+  curricula      Curriculum[]
+  syllabusUnits  SyllabusUnit[]
+  topics         Topic[]
+  quizzes        Quiz[]
+  auditLogs      AuditLog[]
+
+  @@map("schools")
+}
+
+// =====================================================
+// USER & AUTH
+// =====================================================
+
+enum Role {
+  SAAS_ADMIN
+  SCHOOL_PRINCIPAL
+  SCHOOL_ACCOUNTANT
+  CLASS_SUPERVISOR
+  TEACHER
+  STUDENT
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           Role
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  schoolId       String?
+  school         School?  @relation(fields: [schoolId], references: [id])
+
+  teacherProfile   TeacherProfile?
+  studentProfile   StudentProfile?
+  supervisedClasses Class[] @relation("ClassSupervisor")
+  taughtClasses    ClassTeacher[]
+  quizAttempts     QuizAttempt[]
+  aiSessions       AIInteractionSession[]
+  engagementSignals EngagementSignal[]
+  auditLogs        AuditLog[]
+
+  @@map("users")
+}
+
+// =====================================================
+// CLASS
+// =====================================================
+
+model Class {
+  id           String   @id @default(cuid())
+  name         String
+  gradeLevel   String
+  academicYear String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  schoolId     String
+  school       School   @relation(fields: [schoolId], references: [id])
+
+  supervisorId String?
+  supervisor   User?    @relation("ClassSupervisor", fields: [supervisorId], references: [id])
+
+  teachers     ClassTeacher[]
+  students     StudentProfile[]
+  curricula    Curriculum[]
+
+  @@map("classes")
+}
+
+model ClassTeacher {
+  id        String   @id @default(cuid())
+  classId   String
+  teacherId String
+  class     Class    @relation(fields: [classId], references: [id])
+  teacher   User     @relation(fields: [teacherId], references: [id])
+
+  @@unique([classId, teacherId])
+  @@map("class_teachers")
+}
+
+// =====================================================
+// SUBJECT
+// =====================================================
+
+model Subject {
+  id          String   @id @default(cuid())
+  name        String
+  code        String
+  description String?
+  gradeLevel  String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id])
+
+  curricula   Curriculum[]
+  topics      Topic[]
+
+  @@unique([schoolId, code])
+  @@map("subjects")
+}
+
+// =====================================================
+// CURRICULUM & SYLLABUS
+// =====================================================
+
+model Curriculum {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  academicYear String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  schoolId     String
+  school       School   @relation(fields: [schoolId], references: [id])
+
+  subjectId    String
+  subject      Subject  @relation(fields: [subjectId], references: [id])
+
+  classId      String?
+  class        Class?   @relation(fields: [classId], references: [id])
+
+  syllabusUnits SyllabusUnit[]
+
+  @@map("curricula")
+}
+
+model SyllabusUnit {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  sequenceOrder Int
+  estimatedWeeks Int    @default(1)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  schoolId     String
+  school       School   @relation(fields: [schoolId], references: [id])
+
+  curriculumId String
+  curriculum   Curriculum @relation(fields: [curriculumId], references: [id])
+
+  topics       Topic[]
+
+  @@map("syllabus_units")
+}
+
+model Topic {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  sequenceOrder  Int
+  difficultyLevel String  @default("medium")
+  learningObjectives String?
+  keywords       String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  schoolId       String
+  school         School   @relation(fields: [schoolId], references: [id])
+
+  subjectId      String?
+  subject        Subject? @relation(fields: [subjectId], references: [id])
+
+  syllabusUnitId String?
+  syllabusUnit   SyllabusUnit? @relation(fields: [syllabusUnitId], references: [id])
+
+  quizzes        Quiz[]
+  topicMasteries TopicMastery[]
+  learningPlanItems LearningPlanItem[]
+
+  @@map("topics")
+}
+
+// =====================================================
+// PROFILES
+// =====================================================
+
+model TeacherProfile {
+  id             String   @id @default(cuid())
+  bio            String?
+  qualifications String?
+  specializations String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@map("teacher_profiles")
+}
+
+model StudentProfile {
+  id               String   @id @default(cuid())
+  gradeLevel       String?
+  dateOfBirth      DateTime?
+  preferredSubjects String?
+  strengths        String?
+  weakAreas        String?
+  learningStyle    String?
+  confidenceLevel  String?
+  diagnosticScore  Float?
+  onboardingComplete Boolean @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id])
+
+  classId          String?
+  class            Class?   @relation(fields: [classId], references: [id])
+
+  learningPlan     StudentLearningPlan?
+  topicMasteries   TopicMastery[]
+
+  @@map("student_profiles")
+}
+
+// =====================================================
+// QUIZ
+// =====================================================
+
+model Quiz {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  quizType       String   @default("assessment")
+  difficultyLevel String  @default("medium")
+  gradeLevel     String?
+  timeLimit      Int?
+  isPublished    Boolean  @default(false)
+  questions      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  schoolId       String?
+  school         School?  @relation(fields: [schoolId], references: [id])
+
+  topicId        String?
+  topic          Topic?   @relation(fields: [topicId], references: [id])
+
+  attempts       QuizAttempt[]
+
+  @@map("quizzes")
+}
+
+model QuizAttempt {
+  id             String   @id @default(cuid())
+  score          Float
+  totalQuestions Int
+  correctAnswers Int
+  timeTaken      Int?
+  answers        String
+  feedback       String?
+  attemptedAt    DateTime @default(now())
+
+  quizId         String
+  quiz           Quiz     @relation(fields: [quizId], references: [id])
+
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@map("quiz_attempts")
+}
+
+// =====================================================
+// LEARNING JOURNEY
+// =====================================================
+
+model StudentLearningPlan {
+  id              String   @id @default(cuid())
+  status          String   @default("active")
+  currentFocus    String?
+  recommendedPath String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  studentProfileId String  @unique
+  studentProfile  StudentProfile @relation(fields: [studentProfileId], references: [id])
+
+  items           LearningPlanItem[]
+
+  @@map("student_learning_plans")
+}
+
+model LearningPlanItem {
+  id              String   @id @default(cuid())
+  sequenceOrder   Int
+  status          String   @default("pending")
+  itemType        String   @default("lesson")
+  scheduledDate   DateTime?
+  completedAt     DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  learningPlanId  String
+  learningPlan    StudentLearningPlan @relation(fields: [learningPlanId], references: [id])
+
+  topicId         String?
+  topic           Topic?   @relation(fields: [topicId], references: [id])
+
+  @@map("learning_plan_items")
+}
+
+model TopicMastery {
+  id              String   @id @default(cuid())
+  masteryLevel    Float    @default(0)
+  attemptCount    Int      @default(0)
+  lastAttemptedAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  studentProfileId String
+  studentProfile  StudentProfile @relation(fields: [studentProfileId], references: [id])
+
+  topicId         String
+  topic           Topic    @relation(fields: [topicId], references: [id])
+
+  @@unique([studentProfileId, topicId])
+  @@map("topic_masteries")
+}
+
+// =====================================================
+// AI INTERACTION
+// =====================================================
+
+model AIInteractionSession {
+  id              String   @id @default(cuid())
+  sessionType     String   @default("lesson")
+  subject         String?
+  topic           String?
+  gradeLevel      String?
+  messages        String
+  lessonContent   String?
+  status          String   @default("active")
+  startedAt       DateTime @default(now())
+  endedAt         DateTime?
+  durationSeconds Int?
+
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@map("ai_interaction_sessions")
+}
+
+model EngagementSignal {
+  id              String   @id @default(cuid())
+  signalType      String
+  value           String?
+  recordedAt      DateTime @default(now())
+
+  sessionId       String?
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@map("engagement_signals")
+}
+
+// =====================================================
+// AUDIT LOG
+// =====================================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  entity      String
+  entityId    String?
+  details     String?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+
+  schoolId    String?
+  school      School?  @relation(fields: [schoolId], references: [id])
+
+  @@map("audit_logs")
+}
